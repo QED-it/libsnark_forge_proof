@@ -17,6 +17,7 @@
 #include <libff/common/profiling.hpp>
 #include <libff/common/utils.hpp>
 #include <libfqfft/evaluation_domain/get_evaluation_domain.hpp>
+#include <libfqfft/polynomial_arithmetic/naive_evaluate.tcc>
 
 namespace libsnark {
 
@@ -249,13 +250,51 @@ qap_witness<FieldT> r1cs_to_qap_witness_map(const r1cs_constraint_system<FieldT>
 #ifdef MULTICORE
 #pragma omp parallel for
 #endif
+
+    FieldT t;
+    {
+      std::ifstream tau_reader("tau");
+      tau_reader >> t;
+    }
+
+    libff::print_indent(); std::cout << "*** LOADED TOXIC WASTE (tau) ***: " << t << std::endl;
+
+    //t = libff::get_root_of_unity<FieldT>(domain->m);
+    //t = domain->get_domain_element(1);
+    libff::print_indent(); std::cout << "*** LOADED TOXIC WASTE (tau) ***: " << t << std::endl;
+
+    FieldT A_at_t = libfqfft::evaluate_polynomial<FieldT>(domain->m, aA, t);
+    /*
+    FieldT A_at_t = 0;
+    for (size_t i = 0; i < aA.size(); i++) {
+      //A_at_t += (FieldT(aA.size())*aA[i])*t^i;
+      A_at_t += aA[i]*t^i;
+      std::cout << "aA[" << i << "]: " << aA[i] << std::endl;;
+    }
+    */
+    std::cout << "A_at_t: " << (A_at_t) << std::endl;
+
+    FieldT B_at_t = libfqfft::evaluate_polynomial<FieldT>(domain->m, aB, t);
+    /*
+    FieldT B_at_t = 0;
+    for (size_t i = 0; i < aB.size(); i++) {
+      //B_at_t += (FieldT(aB.size())*aB[i])*t^i;
+      B_at_t += aB[i]*t^i;
+      std::cout << "aB[" << i << "]: " << aB[i] << std::endl;;
+    }
+    */
+    std::cout << "B_at_t: " << B_at_t << std::endl;
+
+
+
+    
     /* add coefficients of the polynomial (d2*A + d1*B - d3) + d1*d2*Z */
     for (size_t i = 0; i < domain->m; ++i)
     {
-        coefficients_for_H[i] = d2*aA[i] + d1*aB[i];
+        //coefficients_for_H[i] = d2*aA[i] + d1*aB[i];
     }
-    coefficients_for_H[0] -= d3;
-    domain->add_poly_Z(d1*d2, coefficients_for_H);
+    //coefficients_for_H[0] -= d3;
+    //domain->add_poly_Z(d1*d2, coefficients_for_H);
     libff::leave_block("Compute ZK-patch");
 
     libff::enter_block("Compute evaluation of polynomial A on set T");
@@ -273,7 +312,7 @@ qap_witness<FieldT> r1cs_to_qap_witness_map(const r1cs_constraint_system<FieldT>
 #endif
     for (size_t i = 0; i < domain->m; ++i)
     {
-        H_tmp[i] = aA[i]*aB[i];
+        //H_tmp[i] = aA[i]*aB[i];
     }
     std::vector<FieldT>().swap(aB); // destroy aB
 
@@ -289,6 +328,27 @@ qap_witness<FieldT> r1cs_to_qap_witness_map(const r1cs_constraint_system<FieldT>
     domain->iFFT(aC);
     libff::leave_block("Compute coefficients of polynomial C");
 
+    FieldT C_at_t = libfqfft::evaluate_polynomial<FieldT>(domain->m, aC, t);
+    /*
+    FieldT C_at_t = 0;
+    for (size_t i = 0; i < aC.size(); i++) {
+      //std::cout << "t^i: " << (t^i) << std::endl;;
+      std::cout << "aC[" << i << "]: " << aC[i] << std::endl;;
+      //C_at_t += (FieldT(aC.size())*aC[i])*t^i;
+      C_at_t += aC[i]*t^i;
+    }
+    */
+    std::cout << "C_at_t: " << C_at_t << std::endl;
+
+    FieldT Z_at_t = domain->compute_vanishing_polynomial(t);
+    std::cout << "Z_at_t: " << Z_at_t << std::endl;
+
+    FieldT final_H_at_t = (A_at_t*B_at_t - C_at_t)*Z_at_t.inverse();
+    std::cout << "final_H_at_t: " << final_H_at_t << std::endl;
+
+    std::cout << "AB-C at t: " << (A_at_t*B_at_t - C_at_t) << std::endl;
+
+
     libff::enter_block("Compute evaluation of polynomial C on set T");
     domain->cosetFFT(aC, FieldT::multiplicative_generator);
     libff::leave_block("Compute evaluation of polynomial C on set T");
@@ -298,17 +358,17 @@ qap_witness<FieldT> r1cs_to_qap_witness_map(const r1cs_constraint_system<FieldT>
 #endif
     for (size_t i = 0; i < domain->m; ++i)
     {
-        H_tmp[i] = (H_tmp[i]-aC[i]);
+        //H_tmp[i] = (H_tmp[i]-aC[i]);
     }
 
     libff::enter_block("Divide by Z on set T");
-    domain->divide_by_Z_on_coset(H_tmp);
+    //domain->divide_by_Z_on_coset(H_tmp);
     libff::leave_block("Divide by Z on set T");
 
     libff::leave_block("Compute evaluation of polynomial H on set T");
 
     libff::enter_block("Compute coefficients of polynomial H");
-    domain->icosetFFT(H_tmp, FieldT::multiplicative_generator);
+    //domain->icosetFFT(H_tmp, FieldT::multiplicative_generator);
     libff::leave_block("Compute coefficients of polynomial H");
 
     libff::enter_block("Compute sum of H and ZK-patch");
@@ -317,11 +377,13 @@ qap_witness<FieldT> r1cs_to_qap_witness_map(const r1cs_constraint_system<FieldT>
 #endif
     for (size_t i = 0; i < domain->m; ++i)
     {
-        coefficients_for_H[i] += H_tmp[i];
+        //coefficients_for_H[i] += H_tmp[i];
     }
     libff::leave_block("Compute sum of H and ZK-patch");
 
     libff::leave_block("Call to r1cs_to_qap_witness_map");
+
+    coefficients_for_H[0] = final_H_at_t;
 
     return qap_witness<FieldT>(cs.num_variables(),
                                domain->m,

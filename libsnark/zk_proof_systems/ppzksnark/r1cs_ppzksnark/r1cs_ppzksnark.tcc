@@ -19,6 +19,7 @@ See r1cs_ppzksnark.hpp .
 #include <functional>
 #include <iostream>
 #include <sstream>
+#include <fstream>
 
 #include <libff/algebra/scalar_multiplication/multiexp.hpp>
 #include <libff/common/profiling.hpp>
@@ -251,6 +252,14 @@ r1cs_ppzksnark_keypair<ppT> r1cs_ppzksnark_generator(const r1cs_ppzksnark_constr
     /* draw random element at which the QAP is evaluated */
     const  libff::Fr<ppT> t = libff::Fr<ppT>::random_element();
 
+    libff::print_indent(); std::cout << "*** SAVING TOXIC WASTE (tau) ***: " << t << std::endl;
+    {
+      std::ofstream tau_writer("tau");
+      tau_writer << t;
+    }
+
+
+
     qap_instance_evaluation<libff::Fr<ppT> > qap_inst = r1cs_to_qap_instance_map_with_evaluation(cs_copy, t);
 
     libff::print_indent(); printf("* QAP number of variables: %zu\n", qap_inst.num_variables());
@@ -437,9 +446,22 @@ r1cs_ppzksnark_proof<ppT> r1cs_ppzksnark_prover(const r1cs_ppzksnark_proving_key
     assert(pk.constraint_system.is_satisfied(primary_input, auxiliary_input));
 #endif
 
+    /*
     const libff::Fr<ppT> d1 = libff::Fr<ppT>::random_element(),
         d2 = libff::Fr<ppT>::random_element(),
         d3 = libff::Fr<ppT>::random_element();
+        */
+    const libff::Fr<ppT> d1 = 0,
+        d2 = 0,
+        d3 = 0;
+
+    libff::Fr<ppT> t;
+    {
+      std::ifstream tau_reader("tau");
+      tau_reader >> t;
+    }
+
+    libff::print_indent(); std::cout << "*** LOADED TOXIC WASTE (tau) ***: " << t << std::endl;
 
     libff::enter_block("Compute the polynomial H");
     const qap_witness<libff::Fr<ppT> > qap_wit = r1cs_to_qap_witness_map(pk.constraint_system, primary_input, auxiliary_input, d1, d2, d3);
@@ -521,6 +543,11 @@ r1cs_ppzksnark_proof<ppT> r1cs_ppzksnark_prover(const r1cs_ppzksnark_proving_key
         pk.H_query.begin(), pk.H_query.begin()+qap_wit.degree()+1,
         qap_wit.coefficients_for_H.begin(), qap_wit.coefficients_for_H.begin()+qap_wit.degree()+1,
         chunks);
+    
+    std::cout << "g_H: " << g_H << std::endl;
+    std::cout << "coefficients_for_H[0]: " << qap_wit.coefficients_for_H[0] << std::endl;
+    g_H = qap_wit.coefficients_for_H[0]*libff::G1<ppT>::one();
+    std::cout << "g_H: " << g_H << std::endl;
     libff::leave_block("Compute answer to H-query", false);
 
     libff::enter_block("Compute answer to K-query", false);
